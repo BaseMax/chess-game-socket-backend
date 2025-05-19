@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chess Client</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+
+  <h3>Login</h3>
+  <input id="username" placeholder="Username" />
+  <input id="password" type="password" placeholder="Password" />
+  <button id="loginBtn">Login</button>
+
+  <h3>Commands</h3>
+
+  <div>
+    <button id="createGameBtn">Create Game</button>
+    <button id="joinGameBtn">Join Game</button>
+    <button id="makeMoveBtn">Make Move</button>
+    <button id="sendMessageBtn">Send Message</button>
+  </div>
+
+  <div>
+    <input id="gameIdInput" placeholder="Game ID (number)" />
+    <input id="moveInput" placeholder="Move (e.g. e2e4)" />
+    <input id="messageInput" placeholder="Message" />
+  </div>
+
+  <pre id="output"></pre>
+
+  <script>
+    let socket = null;
+    let token = null;
+
+    const output = document.getElementById('output');
+
+    function log(msg) {
+      output.textContent += msg + '\n';
+      output.scrollTop = output.scrollHeight;
+    }
+
+    document.getElementById('loginBtn').onclick = async () => {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        alert('Please enter username and password');
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:3000/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert('Login failed: ' + (err.error || res.statusText));
+          return;
+        }
+
+        const data = await res.json();
+        token = data.token;
+        log('Login successful! Token received.');
+
+        socket = io('http://localhost:3000', {
+          auth: { token }
+        });
+
+        socket.on('connect', () => log('Socket connected!'));
+        socket.on('disconnect', () => log('Socket disconnected'));
+        socket.on('error', (err) => log('Socket error: ' + err));
+        socket.on('gameCreated', (game) => log('Game created: ' + JSON.stringify(game)));
+        socket.on('gameStarted', () => log('Game started!'));
+        socket.on('moveMade', (move) => log('Move made: ' + move));
+        socket.on('invalidMove', () => log('Invalid move!'));
+        socket.on('gameOver', (winner) => log('Game over! Winner: ' + winner));
+        socket.on('newMessage', ({ userId, message }) => log(`Message from ${userId}: ${message}`));
+        socket.on('error', (msg) => log('Error: ' + msg));
+
+      } catch (err) {
+        alert('Login request failed: ' + err.message);
+      }
+    };
+
+    document.getElementById('createGameBtn').onclick = () => {
+      if (!socket) return alert('Please login first');
+      socket.emit('createGame', {
+        type: 'standard',
+        chooseColor: 0, // 0 random, 1 white, 2 black
+        timeLimit: 300, // seconds
+        isPublic: true
+      });
+      log('Sent createGame command');
+    };
+
+    document.getElementById('joinGameBtn').onclick = () => {
+      if (!socket) return alert('Please login first');
+      const gameId = Number(document.getElementById('gameIdInput').value);
+      if (!gameId) return alert('Please enter a valid game ID');
+      socket.emit('joinGame', { gameId });
+      log(`Sent joinGame command for gameId ${gameId}`);
+    };
+
+    document.getElementById('makeMoveBtn').onclick = () => {
+      if (!socket) return alert('Please login first');
+      const gameId = Number(document.getElementById('gameIdInput').value);
+      const move = document.getElementById('moveInput').value.trim();
+      if (!gameId || !move) return alert('Please enter valid game ID and move');
+      socket.emit('makeMove', { gameId, move });
+      log(`Sent makeMove command: gameId=${gameId}, move=${move}`);
+    };
+
+    document.getElementById('sendMessageBtn').onclick = () => {
+      if (!socket) return alert('Please login first');
+      const gameId = Number(document.getElementById('gameIdInput').value);
+      const message = document.getElementById('messageInput').value.trim();
+      if (!gameId || !message) return alert('Please enter valid game ID and message');
+      socket.emit('sendMessage', { gameId, message });
+      log(`Sent sendMessage command: gameId=${gameId}, message="${message}"`);
+    };
+  </script>
+
+</body>
+</html>

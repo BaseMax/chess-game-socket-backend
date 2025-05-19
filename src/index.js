@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { Chess } from 'chess.js';
 import mysql from 'mysql2/promise';
+import path from 'path';
 
 const PORT = 3000;
 const JWT_SECRET = 'secret';
@@ -27,10 +28,77 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+async function initTables() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      rating INT DEFAULT 1200,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS games (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      creator_id INT NOT NULL,
+      second_player_id INT DEFAULT NULL,
+      type VARCHAR(50) NOT NULL,
+      choose_color TINYINT NOT NULL,
+      time_limit INT NOT NULL,
+      is_public TINYINT NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      status TINYINT NOT NULL DEFAULT 0, -- 0 = waiting, 1 = active, 2 = finished
+      winner TINYINT DEFAULT NULL
+    )
+  `);
+  // Determine winner: 1 = white, 2 = black, 0 = draw
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS moves (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      game_id INT NOT NULL,
+      user_id INT NOT NULL,
+      move VARCHAR(10) NOT NULL,
+      color TINYINT NOT NULL, -- 1 = white, 2 = black
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      game_id INT NOT NULL,
+      user_id INT NOT NULL,
+      message TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+}
+
+initTables()
+  .then(() => {
+    server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+  })
+  .catch((err) => {
+    console.error('Error initializing database tables:', err);
+    process.exit(1);
+  });
+
 async function query(sql, params) {
   const [rows] = await pool.execute(sql, params);
   return rows;
 }
+
+// --- Routes ---
+app.get('/', (req, res) => {
+  res.sendFile('C:/Users/ALI/Projects/chess-game-socket-backend/index.html');
+});
 
 // --- Auth APIs ---
 app.post('/register', async (req, res) => {
@@ -108,9 +176,12 @@ io.on('connection', (socket) => {
   const userId = socket.userId;
 
   socket.on('createGame', async ({ type, chooseColor, timeLimit, isPublic }) => {
-    // Validate inputs
-    if (!type || typeof type !== 'string' || ![0,1,2].includes(chooseColor) === false || typeof timeLimit !== 'number') {
-      return socket.emit('error', 'Invalid game creation parameters');
+    if (!type || typeof type !== 'string') {
+      return socket.emit('error', 'Invalid game type');
+    } else if (chooseColor === undefined || chooseColor === null || ![0, 1, 2].includes(chooseColor)) {
+      return socket.emit('error', 'Invalid color choice');
+    } else if (!timeLimit || typeof timeLimit !== 'number') {
+      return socket.emit('error', 'Invalid time limit');
     }
 
     try {
@@ -135,7 +206,10 @@ io.on('connection', (socket) => {
     try {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
+
       if (!game || game.status !== 0) return socket.emit('error', 'Game not available');
+
+      if (game.creator_id === userId) return socket.emit('error', 'You cannot join your own game');
 
       await query('UPDATE games SET second_player_id = ?, status = 1 WHERE id = ?', [userId, gameId]);
       io.to(`game:${gameId}`).emit('gameStarted');
@@ -171,12 +245,11 @@ io.on('connection', (socket) => {
       io.to(`game:${gameId}`).emit('moveMade', move);
 
       if (gameState.isGameOver()) {
-        // Determine winner: 1 = white, 2 = black, 0 = draw
         let winner;
         if (gameState.isDraw() || gameState.isStalemate() || gameState.isThreefoldRepetition()) {
           winner = 0;
         } else {
-          winner = gameState.turn() === 'w' ? 2 : 1; // The opposite of who's turn it is, because game is over
+          winner = gameState.turn() === 'w' ? 2 : 1;
         }
 
         await query('UPDATE games SET status = 2, winner = ? WHERE id = ?', [winner, gameId]);
@@ -205,5 +278,3 @@ io.on('connection', (socket) => {
     }
   });
 });
-
-server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
