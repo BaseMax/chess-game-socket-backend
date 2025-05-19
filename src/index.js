@@ -178,20 +178,51 @@ io.on('connection', (socket) => {
   socket.on('checkOpenGames', async () => {
     try {
       const games = await query(
-        'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1)',
+        'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1) ORDER BY id DESC',
         [userId, userId]
       );
       if (games.length > 0) {
         games.forEach(game => {
           socket.join(`game:${game.id}`);
-          socket.emit('openGame', { gameId: game.id, status: game.status });
         });
+        const lastGame = games[games.length - 1];
+        socket.emit('openGame', { gameId: lastGame.id, status: lastGame.status });
       } else {
         socket.emit('noOpenGames');
       }
     } catch (error) {
       console.error('CheckOpenGames error:', error);
       socket.emit('error', 'Could not check open games');
+    }
+  });
+
+  socket.on('getGameInfo', async ({ gameId }) => {
+    if (!gameId || typeof gameId !== 'number') {
+      return socket.emit('error', 'Invalid game ID');
+    }
+    try {
+      const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
+      const game = games[0];
+      if (!game) return socket.emit('error', 'Game not found');
+      
+      const moves = await query('SELECT * FROM moves WHERE game_id = ? ORDER BY created_at', [gameId]);
+      const messages = await query('SELECT * FROM messages WHERE game_id = ? ORDER BY created_at', [gameId]);
+      const gameInfo = {
+        id: game.id,
+        creatorId: game.creator_id,
+        secondPlayerId: game.second_player_id,
+        type: game.type,
+        chooseColor: game.choose_color,
+        timeLimit: game.time_limit,
+        isPublic: game.is_public,
+        status: game.status,
+        moves,
+        messages
+      };
+      socket.emit('gameInfo', gameInfo);
+    } catch (error) {
+      console.error('GetGameInfo error:', error);
+      socket.emit('error', 'Could not get game info');
     }
   });
 
