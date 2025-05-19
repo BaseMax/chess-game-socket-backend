@@ -1,6 +1,6 @@
 # chess-game-socket-backend
 
 ```
-bunx prisma migrate dev --name init
-bunx prisma generate
+npm install
+npm run start
 ```
