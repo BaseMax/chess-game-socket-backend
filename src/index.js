@@ -177,6 +177,18 @@ io.on('connection', (socket) => {
   const userId = socket.userId;
   socket.emit('checkOpenGames');
 
+  socket.on('getMyUser', async () => {
+    try {
+      const users = await query('SELECT * FROM users WHERE id = ?', [userId]);
+      const user = users[0];
+      if (!user) return socket.emit('myUser', 'User not found');
+      socket.emit('myUser', { id: user.id, username: user.username, rating: user.rating });
+    } catch (error) {
+      console.error('GetMyUser error:', error);
+      socket.emit('error', 'Could not fetch user');
+    }
+  });
+
   socket.on('availablePublicGamesToWatch', async () => {
     try {
       const games = await query(
