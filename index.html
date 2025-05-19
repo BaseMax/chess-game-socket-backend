@@ -80,6 +80,11 @@
         socket.on('gameStarted', () => log('Game started!'));
         socket.on('gameInfo', (game) => log('Game info: ' + JSON.stringify(game)));
         socket.on('noOpenGames', () => log('No open games available'));
+        socket.on('myGamesList', (games) => {
+          log('My games list:');
+          if (!games.length) return log('No games found');
+          games.forEach(game => log(JSON.stringify(game)));
+        });
         socket.on('openGame', (game) => log('Open game found: ' + JSON.stringify(game)));
         socket.on('gameWatcherJoin', () => log('A watcher joined the game to observe'));
         socket.on('gameWatcherLeft', () => log('A watcher left the game'));

@@ -175,7 +175,7 @@ io.use(async (socket, next) => {
 // --- Socket Events ---
 io.on('connection', (socket) => {
   const userId = socket.userId;
-  
+
   socket.emit('checkJoinGames');
   socket.emit('checkOpenGames');
 
@@ -231,11 +231,11 @@ io.on('connection', (socket) => {
       );
       socket.emit('myGamesList', games);
       if (games.length === 0) {
-        socket.emit('noGames');
+        socket.emit('myGamesList', 'No games found');
       }
     } catch (error) {
       console.error('MyGames error:', error);
-      socket.emit('error', 'Could not fetch games');
+      socket.emit('myGamesList', 'Could not fetch games');
     }
   });
 
