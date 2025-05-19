@@ -198,12 +198,12 @@ io.on('connection', (socket) => {
 
   socket.on('getGameInfo', async ({ gameId }) => {
     if (!gameId || typeof gameId !== 'number') {
-      return socket.emit('error', 'Invalid game ID');
+      return socket.emit('gameInfo', 'Invalid game ID');
     }
     try {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
-      if (!game) return socket.emit('error', 'Game not found');
+      if (!game) return socket.emit('gameInfo', 'Game not found');
       
       const moves = await query('SELECT * FROM moves WHERE game_id = ? ORDER BY created_at', [gameId]);
       const messages = await query('SELECT * FROM messages WHERE game_id = ? ORDER BY created_at', [gameId]);

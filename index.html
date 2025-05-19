@@ -70,11 +70,17 @@
           auth: { token }
         });
 
-        socket.on('connect', () => log('Socket connected!'));
+        socket.on('connect', () => {
+          log('Socket connected!');
+          socket.emit('checkOpenGames');
+        });
         socket.on('disconnect', () => log('Socket disconnected'));
         socket.on('error', (err) => log('Socket error: ' + err));
         socket.on('gameCreated', (game) => log('Game created: ' + JSON.stringify(game)));
         socket.on('gameStarted', () => log('Game started!'));
+        socket.on('gameInfo', (game) => log('Game info: ' + JSON.stringify(game)));
+        socket.on('noOpenGames', () => log('No open games available'));
+        socket.on('openGame', (game) => log('Open game found: ' + JSON.stringify(game)));
         socket.on('gameWatcherJoin', () => log('A watcher joined the game to observe'));
         socket.on('gameWatcherLeft', () => log('A watcher left the game'));
         socket.on('moveMade', (move) => log('Move made: ' + move));
