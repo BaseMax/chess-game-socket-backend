@@ -49,6 +49,7 @@ async function initTables() {
       time_limit INT NOT NULL,
       is_public TINYINT NOT NULL DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      finished_at DATETIME DEFAULT NULL,
       status TINYINT NOT NULL DEFAULT 0, -- 0 = waiting, 1 = active, 2 = finished
       winner TINYINT DEFAULT NULL
     )
@@ -174,6 +175,7 @@ io.use(async (socket, next) => {
 // --- Socket Events ---
 io.on('connection', (socket) => {
   const userId = socket.userId;
+  socket.emit('checkOpenGames');
 
   socket.on('checkOpenGames', async () => {
     try {
@@ -309,6 +311,8 @@ io.on('connection', (socket) => {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
       if (!game) return socket.emit('error', 'Game not found');
+      if (game.status == 2) return socket.emit('error', 'Game already finished');
+      if (game.status !== 1) return socket.emit('error', 'Game is not active');
 
       const movesRows = await query('SELECT * FROM moves WHERE game_id = ? ORDER BY created_at', [gameId]);
       const gameState = new Chess();
@@ -332,7 +336,8 @@ io.on('connection', (socket) => {
           winner = gameState.turn() === 'w' ? 2 : 1;
         }
 
-        await query('UPDATE games SET status = 2, winner = ? WHERE id = ?', [winner, gameId]);
+        const finishedAt = new Date();
+        await query('UPDATE games SET status = 2, winner = ?, finished_at = ? WHERE id = ?', [winner, gameId, finishedAt]);
         io.to(`game:${gameId}`).emit('gameOver', winner);
       }
     } catch (error) {
@@ -347,6 +352,23 @@ io.on('connection', (socket) => {
     }
 
     try {
+      const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
+      const game = games[0];
+      if (!game) return socket.emit('error', 'Game not found');
+
+      if (game.status === 0) return socket.emit('newMessage', 'Game is not active - waiting for next player');
+
+      // Check if game is finished and if the message is sent after 10 minutes (10 minutes is the threshold)
+      if (game.status === 2 && game.finished_at) {
+        const finishedTime = new Date(game.finished_at);
+        const currentTime = new Date();
+        const timeDiff = Math.abs(currentTime - finishedTime);
+        const diffMinutes = Math.floor((timeDiff / 1000) / 60);
+        if (diffMinutes > 10) {
+          return socket.emit('newMessage', 'Game already finished');
+        }
+      }
+
       await query(
         'INSERT INTO messages (game_id, user_id, message, created_at) VALUES (?, ?, ?, NOW())',
         [gameId, userId, message]

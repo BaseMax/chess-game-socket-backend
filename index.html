@@ -86,7 +86,7 @@
         socket.on('moveMade', (move) => log('Move made: ' + move));
         socket.on('invalidMove', () => log('Invalid move!'));
         socket.on('gameOver', (winner) => log('Game over! Winner: ' + winner));
-        socket.on('newMessage', ({ userId, message }) => log(`Message from ${userId}: ${message}`));
+        socket.on('newMessage', (msg) => log(`Message from ${JSON.stringify(msg)}`));
         socket.on('error', (msg) => log('Error: ' + msg));
 
       } catch (err) {
