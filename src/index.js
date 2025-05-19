@@ -86,7 +86,8 @@ app.post('/register', async (req, res) => {
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = await db.select().from(users).where(users.username.eq(username)).get();
+  console.log(users.columns.username);
+  const user = await db.select().from(users).where(users.username.equals(username)).get();
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
@@ -123,19 +124,19 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinGame', async ({ gameId }) => {
-    const game = await db.select().from(games).where(games.id.eq(gameId)).get();
+    const game = await db.select().from(games).where(games.id.equals(gameId)).get();
     if (!game || game.status !== 0) return socket.emit('error', 'Game not available');
 
-    await db.update(games).set({ secondPlayerId: userId, status: 1 }).where(games.id.eq(gameId));
+    await db.update(games).set({ secondPlayerId: userId, status: 1 }).where(games.id.equals(gameId));
     io.to(`game:${gameId}`).emit('gameStarted');
   });
 
   socket.on('makeMove', async ({ gameId, move }) => {
-    const game = await db.select().from(games).where(games.id.eq(gameId)).get();
+    const game = await db.select().from(games).where(games.id.equals(gameId)).get();
     if (!game) return;
 
     const gameState = new Chess();
-    const allMoves = await db.select().from(moves).where(moves.gameId.eq(gameId)).orderBy(moves.createdAt);
+    const allMoves = await db.select().from(moves).where(moves.gameId.equals(gameId)).orderBy(moves.createdAt);
     allMoves.forEach((m) => gameState.move(m.move));
     
     const result = gameState.move(move);
@@ -152,7 +153,7 @@ io.on('connection', (socket) => {
 
     if (gameState.isGameOver()) {
       const winner = gameState.turn() === 'w' ? 1 : 0;
-      await db.update(games).set({ status: 2, winner }).where(games.id.eq(gameId));
+      await db.update(games).set({ status: 2, winner }).where(games.id.equals(gameId));
       io.to(`game:${gameId}`).emit('gameOver', winner);
     }
   });
