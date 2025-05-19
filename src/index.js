@@ -175,6 +175,26 @@ io.use(async (socket, next) => {
 io.on('connection', (socket) => {
   const userId = socket.userId;
 
+  socket.on('checkOpenGames', async () => {
+    try {
+      const games = await query(
+        'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1)',
+        [userId, userId]
+      );
+      if (games.length > 0) {
+        games.forEach(game => {
+          socket.join(`game:${game.id}`);
+          socket.emit('openGame', { gameId: game.id, status: game.status });
+        });
+      } else {
+        socket.emit('noOpenGames');
+      }
+    } catch (error) {
+      console.error('CheckOpenGames error:', error);
+      socket.emit('error', 'Could not check open games');
+    }
+  });
+
   socket.on('createGame', async ({ type, chooseColor, timeLimit, isPublic }) => {
     if (!type || typeof type !== 'string') {
       return socket.emit('error', 'Invalid game type');
