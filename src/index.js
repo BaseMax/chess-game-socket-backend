@@ -177,6 +177,54 @@ io.on('connection', (socket) => {
   const userId = socket.userId;
   socket.emit('checkOpenGames');
 
+  socket.on('availablePublicGamesToWatch', async () => {
+    try {
+      const games = await query(
+        'SELECT * FROM games WHERE (creator_id != ? AND second_player_id != ? AND second_player_id IS NOT NULL) AND is_public = 1 AND status = 1 ORDER BY id DESC',
+        [userId, userId]
+      );
+      socket.emit('availablePublicGamesToWatch', games);
+      if (games.length === 0) {
+        socket.emit('noAvailablePublicGamesToWatch');
+      }
+    } catch (error) {
+      console.error('AvailablePublicGames error:', error);
+      socket.emit('error', 'Could not fetch available public games');
+    }
+  });
+
+  socket.on('availablePublicGamesToJoin', async () => {
+    try {
+      const games = await query(
+        'SELECT * FROM games WHERE (creator_id != ? AND second_player_id IS NULL) AND is_public = 1 AND status = 0 ORDER BY id DESC',
+        [userId]
+      );
+      socket.emit('availablePublicGamesToJoin', games);
+      if (games.length === 0) {
+        socket.emit('noAvailablePublicGamesToJoin');
+      }
+    } catch (error) {
+      console.error('AvailablePublicGames error:', error);
+      socket.emit('error', 'Could not fetch available public games');
+    }
+  });
+
+  socket.on('myGames', async () => {
+    try {
+      const games = await query(
+        'SELECT * FROM games WHERE creator_id = ? OR second_player_id = ? ORDER BY id DESC',
+        [userId, userId]
+      );
+      socket.emit('myGamesList', games);
+      if (games.length === 0) {
+        socket.emit('noGames');
+      }
+    } catch (error) {
+      console.error('MyGames error:', error);
+      socket.emit('error', 'Could not fetch games');
+    }
+  });
+
   socket.on('checkOpenGames', async () => {
     try {
       const games = await query(
