@@ -1,0 +1,11 @@
+model Game {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  mode       String   // "friend" | "bot"
+  fen        String
+  moves      String[] @default([])
+  status     String   // "waiting" | "in_progress" | "finished"
+  winner     String?  // "white" | "black" | "draw"
+  playerWhite String?
+  playerBlack String?
+}
