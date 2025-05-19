@@ -187,7 +187,7 @@ io.on('connection', (socket) => {
       socket.emit('myUser', { id: user.id, username: user.username, rating: user.rating });
     } catch (error) {
       console.error('GetMyUser error:', error);
-      socket.emit('error', 'Could not fetch user');
+      socket.emit('myUser', 'Could not fetch user');
     }
   });
 
@@ -203,7 +203,7 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('AvailablePublicGames error:', error);
-      socket.emit('error', 'Could not fetch available public games');
+      socket.emit('availablePublicGamesToWatch', 'Could not fetch available public games');
     }
   });
 
@@ -219,7 +219,7 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('AvailablePublicGames error:', error);
-      socket.emit('error', 'Could not fetch available public games');
+      socket.emit('availablePublicGamesToJoin', 'Could not fetch available public games');
     }
   });
 
@@ -245,6 +245,7 @@ io.on('connection', (socket) => {
         'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1) ORDER BY id DESC',
         [userId, userId]
       );
+      socket.emit('joinGames', games);
       if (games.length > 0) {
         games.forEach(game => {
           socket.join(`game:${game.id}`);
@@ -254,26 +255,26 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('CheckOpenGames error:', error);
-      socket.emit('error', 'Could not check open games');
+      socket.emit('joinGames', 'Could not check open games');
     }
   });
 
   socket.on('checkOpenGames', async () => {
     try {
       const games = await query(
-        'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1) ORDER BY id DESC LIMIT 1',
+        'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1) ORDER BY id DESC',
         [userId, userId]
       );
       if (games.length > 0) {
-        games.forEach(game => {
-          socket.emit('openGame', { gameId: game.id, status: game.status });
-        });
+        const lastGame = games[0];
+        socket.emit('openGame', { gameId: lastGame.id, status: lastGame.status });
       } else {
+        socket.emit('openGame', 'No open games found');
         socket.emit('noOpenGames');
       }
     } catch (error) {
       console.error('CheckOpenGames error:', error);
-      socket.emit('error', 'Could not check open games');
+      socket.emit('openGame', 'Could not check open games');
     }
   });
 
@@ -303,17 +304,17 @@ io.on('connection', (socket) => {
       socket.emit('gameInfo', gameInfo);
     } catch (error) {
       console.error('GetGameInfo error:', error);
-      socket.emit('error', 'Could not get game info');
+      socket.emit('gameInfo', 'Could not get game info');
     }
   });
 
   socket.on('createGame', async ({ type, chooseColor, timeLimit, isPublic }) => {
     if (!type || typeof type !== 'string') {
-      return socket.emit('error', 'Invalid game type');
+      return socket.emit('gameCreated', 'Invalid game type');
     } else if (chooseColor === undefined || chooseColor === null || ![0, 1, 2].includes(chooseColor)) {
-      return socket.emit('error', 'Invalid color choice');
+      return socket.emit('gameCreated', 'Invalid color choice');
     } else if (!timeLimit || typeof timeLimit !== 'number') {
-      return socket.emit('error', 'Invalid time limit');
+      return socket.emit('gameCreated', 'Invalid time limit');
     }
 
     try {
@@ -326,27 +327,28 @@ io.on('connection', (socket) => {
       socket.emit('gameCreated', { id: gameId, creatorId: userId, type, chooseColor, timeLimit, isPublic });
     } catch (error) {
       console.error('CreateGame error:', error);
-      socket.emit('error', 'Could not create game');
+      socket.emit('gameCreated', 'Could not create game');
     }
   });
 
   socket.on('watchGame', async ({ gameId }) => {
     if (!gameId || typeof gameId !== 'number') {
-      return socket.emit('error', 'Invalid game ID');
+      return socket.emit('watchGame', 'Invalid game ID');
     }
 
     try {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
 
-      if (!game) return socket.emit('error', 'Game not available');
-      if (game.status === 2) return socket.emit('error', 'Game already finished');
-      if (game.creator_id === userId) return socket.emit('error', 'You cannot watch your own game');
-      if (game.second_player_id === userId) return socket.emit('error', 'You cannot watch your own game');
-      if (game.is_public === 0) return socket.emit('error', 'Game is private');
+      if (!game) return socket.emit('watchGame', 'Game not available');
+      if (game.status === 2) return socket.emit('watchGame', 'Game already finished');
+      if (game.creator_id === userId) return socket.emit('watchGame', 'You cannot watch your own game');
+      if (game.second_player_id === userId) return socket.emit('watchGame', 'You cannot watch your own game');
+      if (game.is_public === 0) return socket.emit('watchGame', 'Game is private');
 
       io.to(`game:${gameId}`).emit('gameWatcherJoin', { userId });
       socket.join(`game:${gameId}`);
+      socket.emit('watchGame', { gameId, userId, game });
 
       socket.on('disconnect', () => {
         socket.leave(`game:${gameId}`);
@@ -354,46 +356,47 @@ io.on('connection', (socket) => {
       });
     } catch (error) {
       console.error('watchGame error:', error);
-      socket.emit('error', 'Could not watch game');
+      socket.emit('watchGame', 'Could not watch game');
     }
   });
 
   socket.on('joinGame', async ({ gameId }) => {
     if (!gameId || typeof gameId !== 'number') {
-      return socket.emit('error', 'Invalid game ID');
+      return socket.emit('joinGame', 'Invalid game ID');
     }
 
     try {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
 
-      if (!game) return socket.emit('error', 'Game not available');
-      if (game.status === 2) return socket.emit('error', 'Game already finished');
-      if (game.creator_id === userId) return socket.emit('error', 'You cannot join your own game, next player must join');
-      if (game.second_player_id && game.second_player_id !== userId) return socket.emit('error', 'Game already has two players');
+      if (!game) return socket.emit('joinGame', 'Game not available');
+      if (game.status === 2) return socket.emit('joinGame', 'Game already finished');
+      if (game.creator_id === userId) return socket.emit('joinGame', 'You cannot join your own game, next player must join');
+      if (game.second_player_id && game.second_player_id !== userId) return socket.emit('joinGame', 'Game already has two players');
 
       await query('UPDATE games SET second_player_id = ?, status = 1 WHERE id = ?', [userId, gameId]);
       io.to(`game:${gameId}`).emit('gameStarted');
       socket.join(`game:${gameId}`);
+      socket.emit('joinGame', { gameId, userId, game });
     } catch (error) {
       console.error('JoinGame error:', error);
-      socket.emit('error', 'Could not join game');
+      socket.emit('joinGame', 'Could not join game');
     }
   });
 
   socket.on('makeMove', async ({ gameId, move }) => {
     if (!gameId || typeof gameId !== 'number' || !move || typeof move !== 'string') {
-      return socket.emit('error', 'Invalid move parameters');
+      return socket.emit('moveMade', 'Invalid move parameters');
     }
 
     try {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
-      if (!game) return socket.emit('error', 'Game not found');
-      if (game.status == 2) return socket.emit('error', 'Game already finished');
-      if (game.status !== 1) return socket.emit('error', 'Game is not active');
+      if (!game) return socket.emit('moveMade', 'Game not found');
+      if (game.status == 2) return socket.emit('moveMade', 'Game already finished');
+      if (game.status !== 1) return socket.emit('moveMade', 'Game is not active');
 
-      const movesRows = await query('SELECT * FROM moves WHERE game_id = ? ORDER BY created_at', [gameId]);
+      const movesRows = await query('SELECT * FROM moves WHERE game_id = ? ORDER BY created_at ASC', [gameId]);
       const gameState = new Chess();
       movesRows.forEach(m => gameState.move(m.move));
 
@@ -421,19 +424,19 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('MakeMove error:', error);
-      socket.emit('error', 'Move failed');
+      socket.emit('invalidMove', 'Move failed');
     }
   });
 
   socket.on('sendMessage', async ({ gameId, message }) => {
     if (!gameId || typeof gameId !== 'number' || !message || typeof message !== 'string') {
-      return socket.emit('error', 'Invalid message parameters');
+      return socket.emit('newMessage', 'Invalid message parameters');
     }
 
     try {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
-      if (!game) return socket.emit('error', 'Game not found');
+      if (!game) return socket.emit('newMessage', 'Game not found');
 
       if (game.status === 0) return socket.emit('newMessage', 'Game is not active - waiting for next player');
 
@@ -455,7 +458,7 @@ io.on('connection', (socket) => {
       io.to(`game:${gameId}`).emit('newMessage', { userId, message });
     } catch (error) {
       console.error('SendMessage error:', error);
-      socket.emit('error', 'Message sending failed');
+      socket.emit('newMessage', 'Message sending failed');
     }
   });
 });
