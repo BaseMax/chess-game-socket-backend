@@ -175,6 +175,8 @@ io.use(async (socket, next) => {
 // --- Socket Events ---
 io.on('connection', (socket) => {
   const userId = socket.userId;
+  
+  socket.emit('checkJoinGames');
   socket.emit('checkOpenGames');
 
   socket.on('getMyUser', async () => {
@@ -237,7 +239,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('checkOpenGames', async () => {
+  socket.on('checkJoinGames', async () => {
     try {
       const games = await query(
         'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1) ORDER BY id DESC',
@@ -247,8 +249,25 @@ io.on('connection', (socket) => {
         games.forEach(game => {
           socket.join(`game:${game.id}`);
         });
-        const lastGame = games[games.length - 1];
-        socket.emit('openGame', { gameId: lastGame.id, status: lastGame.status });
+      } else {
+        socket.emit('noJoinGames');
+      }
+    } catch (error) {
+      console.error('CheckOpenGames error:', error);
+      socket.emit('error', 'Could not check open games');
+    }
+  });
+
+  socket.on('checkOpenGames', async () => {
+    try {
+      const games = await query(
+        'SELECT * FROM games WHERE (creator_id = ? OR second_player_id = ?) AND (status = 0 OR status = 1) ORDER BY id DESC LIMIT 1',
+        [userId, userId]
+      );
+      if (games.length > 0) {
+        games.forEach(game => {
+          socket.emit('openGame', { gameId: game.id, status: game.status });
+        });
       } else {
         socket.emit('noOpenGames');
       }
