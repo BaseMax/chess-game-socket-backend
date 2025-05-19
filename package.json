@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "name": "chess-game-socket-backend",
   "version": "1.0.0",
   "description": "A chess backend with socket.io, SQLite, and Node.js",
@@ -18,8 +19,12 @@
   "author": "BaseMax",
   "license": "MIT",
   "dependencies": {
+    "@libsql/client": "^0.15.6",
+    "bcrypt": "^6.0.0",
     "chess.js": "^1.0.0",
+    "drizzle-orm": "^0.43.1",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
     "socket.io": "^4.7.2",
     "sqlite3": "^5.1.6",
     "zod": "^3.22.4"
