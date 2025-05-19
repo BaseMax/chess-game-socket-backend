@@ -198,6 +198,34 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('watchGame', async ({ gameId }) => {
+    if (!gameId || typeof gameId !== 'number') {
+      return socket.emit('error', 'Invalid game ID');
+    }
+
+    try {
+      const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
+      const game = games[0];
+
+      if (!game) return socket.emit('error', 'Game not available');
+      if (game.status === 2) return socket.emit('error', 'Game already finished');
+      if (game.creator_id === userId) return socket.emit('error', 'You cannot watch your own game');
+      if (game.second_player_id === userId) return socket.emit('error', 'You cannot watch your own game');
+      if (game.is_public === 0) return socket.emit('error', 'Game is private');
+
+      io.to(`game:${gameId}`).emit('gameWatcherJoin', { userId });
+      socket.join(`game:${gameId}`);
+
+      socket.on('disconnect', () => {
+        socket.leave(`game:${gameId}`);
+        io.to(`game:${gameId}`).emit('gameWatcherLeft', { userId });
+      });
+    } catch (error) {
+      console.error('watchGame error:', error);
+      socket.emit('error', 'Could not watch game');
+    }
+  });
+
   socket.on('joinGame', async ({ gameId }) => {
     if (!gameId || typeof gameId !== 'number') {
       return socket.emit('error', 'Invalid game ID');
@@ -207,13 +235,10 @@ io.on('connection', (socket) => {
       const games = await query('SELECT * FROM games WHERE id = ?', [gameId]);
       const game = games[0];
 
-      if (!game || game.status !== 0) return socket.emit('error', 'Game not available');
-      if (game.creator_id === userId) return socket.emit('error', 'You cannot join your own game');
-      if (game.second_player_id) return socket.emit('error', 'Game already has two players');
-      if (game.is_public === 0) return socket.emit('error', 'Game is private');
-      if (game.choose_color === 1 && game.creator_id === userId) return socket.emit('error', 'You cannot join this game');
-      if (game.choose_color === 2 && game.second_player_id === userId) return socket.emit('error', 'You cannot join this game');
-      if (game.choose_color === 0 && game.creator_id === userId) return socket.emit('error', 'You cannot join this game');
+      if (!game) return socket.emit('error', 'Game not available');
+      if (game.status === 2) return socket.emit('error', 'Game already finished');
+      if (game.creator_id === userId) return socket.emit('error', 'You cannot join your own game, next player must join');
+      if (game.second_player_id && game.second_player_id !== userId) return socket.emit('error', 'Game already has two players');
 
       await query('UPDATE games SET second_player_id = ?, status = 1 WHERE id = ?', [userId, gameId]);
       io.to(`game:${gameId}`).emit('gameStarted');

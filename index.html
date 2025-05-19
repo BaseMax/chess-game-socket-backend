@@ -75,6 +75,8 @@
         socket.on('error', (err) => log('Socket error: ' + err));
         socket.on('gameCreated', (game) => log('Game created: ' + JSON.stringify(game)));
         socket.on('gameStarted', () => log('Game started!'));
+        socket.on('gameWatcherJoin', () => log('A watcher joined the game to observe'));
+        socket.on('gameWatcherLeft', () => log('A watcher left the game'));
         socket.on('moveMade', (move) => log('Move made: ' + move));
         socket.on('invalidMove', () => log('Invalid move!'));
         socket.on('gameOver', (winner) => log('Game over! Winner: ' + winner));
