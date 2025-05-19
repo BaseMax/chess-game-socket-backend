@@ -7,9 +7,13 @@ import bcrypt from 'bcrypt';
 import { Chess } from 'chess.js';
 import mysql from 'mysql2/promise';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const PORT = 3000;
 const JWT_SECRET = 'secret';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -98,7 +102,9 @@ async function query(sql, params) {
 
 // --- Routes ---
 app.get('/', (req, res) => {
-  res.sendFile('C:/Users/ALI/Projects/chess-game-socket-backend/index.html');
+  const parentDir = path.join(__dirname, '..');
+  const indexPath = path.join(parentDir, 'index.html');
+  res.sendFile(indexPath);
 });
 
 // --- Auth APIs ---
