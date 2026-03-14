@@ -27,7 +27,7 @@
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.1",
     "socket.io": "^4.7.2",
-    "sqlite3": "^5.1.6",
+    "sqlite3": "^6.0.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
